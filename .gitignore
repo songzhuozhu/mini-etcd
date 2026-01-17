@@ -1,0 +1,13 @@
+# Binaries (编译生成的二进制文件)
+/bin/
+mini-etcd
+mini-etcd.exe
+*.exe
+
+# IDE specific files (IDE 配置文件，如果你用 VSCode 或 Goland)
+.vscode/
+.idea/
+
+# OS specific (操作系统生成的垃圾文件)
+.DS_Store
+Thumbs.db

@@ -1,30 +1,30 @@
 package main
 
 import (
-	"fmt"
-	"mini-etcd/internal/store" // 导入我们要刚才写的包
+	"log"
+	"mini-etcd/internal/server"
+	"mini-etcd/internal/store"
+	"net/http"
 )
 
 func main() {
-	// 1. 初始化存储
+	// 1. 初始化核心组件 (Dependency Injection)
+	// 创建内存存储
 	kv := store.NewMemoryStore()
+	// 创建 HTTP 服务，并将存储注入进去
+	srv := server.NewHTTPServer(kv)
 
-	// 2. 写入数据
-	fmt.Println("正在写入数据: key=name, value=etcd-learner")
-	kv.Put("name", "etcd-learner")
+	// 2. 注册路由 (Routing)
+	// 将 URL 路径映射到具体的方法
+	http.HandleFunc("/put", srv.HandlePut)
+	http.HandleFunc("/get", srv.HandleGet)
 
-	// 3. 读取数据
-	// Go 支持多返回值，这里返回 value 和 是否存在的布尔值
-	val, exists := kv.Get("name")
-	if exists {
-		fmt.Printf("读取成功: key=name, value=%s\n", val)
-	} else {
-		fmt.Println("key 不存在")
-	}
+	// 3. 启动服务
+	addr := ":8080"
+	log.Printf("Mini-Etcd Server starting on %s ...", addr)
 
-	// 4. 读取不存在的数据
-	_, exists = kv.Get("unknown")
-	if !exists {
-		fmt.Println("读取 unknown 失败，符合预期")
+	// ListenAndServe 会一直阻塞，直到出错
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatal(err)
 	}
 }

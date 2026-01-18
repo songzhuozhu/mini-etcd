@@ -11,17 +11,16 @@ import (
 
 func main() {
 	// 1. 初始化 WAL
-	// 数据会保存在当前目录下的 server.wal 文件中
 	w, err := wal.NewWAL("server.wal")
 	if err != nil {
 		log.Fatal("无法打开 WAL 文件:", err)
 	}
 	defer w.Close()
 
-	// 2. 初始化存储并注入 WAL
+	// 2. 初始化存储
 	kv := store.NewMemoryStore(w)
 
-	// 3. 恢复数据 (Replay)
+	// 3. 恢复数据
 	fmt.Println("正在从磁盘恢复数据...")
 	entries, err := w.ReadAll()
 	if err != nil {
@@ -32,8 +31,10 @@ func main() {
 
 	// 4. 启动 HTTP 服务
 	srv := server.NewHTTPServer(kv)
+
 	http.HandleFunc("/put", srv.HandlePut)
 	http.HandleFunc("/get", srv.HandleGet)
+	http.HandleFunc("/delete", srv.HandleDelete) // [新增]
 	http.HandleFunc("/watch", srv.HandleWatch)
 
 	addr := ":8080"

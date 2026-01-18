@@ -53,7 +53,11 @@ func (s *HTTPServer) HandlePut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. 调用核心存储逻辑
-	s.Store.Put(req.Key, req.Value)
+	err := s.Store.Put(req.Key, req.Value)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// 4. 返回结果
 	w.WriteHeader(http.StatusOK)

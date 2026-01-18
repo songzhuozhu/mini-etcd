@@ -11,3 +11,6 @@ mini-etcd.exe
 # OS specific (操作系统生成的垃圾文件)
 .DS_Store
 Thumbs.db
+
+# Data files
+*.wal

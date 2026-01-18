@@ -1,29 +1,42 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"mini-etcd/internal/server"
 	"mini-etcd/internal/store"
+	"mini-etcd/internal/wal"
 	"net/http"
 )
 
 func main() {
-	// 1. 初始化核心组件 (Dependency Injection)
-	// 创建内存存储
-	kv := store.NewMemoryStore()
-	// 创建 HTTP 服务，并将存储注入进去
-	srv := server.NewHTTPServer(kv)
+	// 1. 初始化 WAL
+	// 数据会保存在当前目录下的 server.wal 文件中
+	w, err := wal.NewWAL("server.wal")
+	if err != nil {
+		log.Fatal("无法打开 WAL 文件:", err)
+	}
+	defer w.Close()
 
-	// 2. 注册路由 (Routing)
-	// 将 URL 路径映射到具体的方法
+	// 2. 初始化存储并注入 WAL
+	kv := store.NewMemoryStore(w)
+
+	// 3. 恢复数据 (Replay)
+	fmt.Println("正在从磁盘恢复数据...")
+	entries, err := w.ReadAll()
+	if err != nil {
+		log.Fatal("无法读取 WAL 文件:", err)
+	}
+	kv.Restore(entries)
+	fmt.Printf("成功恢复了 %d 条记录\n", len(entries))
+
+	// 4. 启动 HTTP 服务
+	srv := server.NewHTTPServer(kv)
 	http.HandleFunc("/put", srv.HandlePut)
 	http.HandleFunc("/get", srv.HandleGet)
 
-	// 3. 启动服务
 	addr := ":8080"
 	log.Printf("Mini-Etcd Server starting on %s ...", addr)
-
-	// ListenAndServe 会一直阻塞，直到出错
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal(err)
 	}

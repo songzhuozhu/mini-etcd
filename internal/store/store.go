@@ -1,49 +1,52 @@
 package store
 
 import (
+	"mini-etcd/internal/wal" // 引入刚才写的 wal 包
 	"sync"
 )
 
-// Store 定义了我们存储引擎的接口
-// 使用接口(Interface)是 Go 语言解耦的核心
 type Store interface {
-	Put(key string, value string)
+	Put(key string, value string) error // 修改返回值，增加 error
 	Get(key string) (string, bool)
-	Delete(key string)
+	// Delete(key string) error // 暂时先不改 Delete，留作练习
 }
 
-// MemoryStore 是 Store 接口的一个内存实现
 type MemoryStore struct {
-	// mu 是读写互斥锁。
-	// Etcd 这种读多写少的场景，RWMutex 比 Mutex 性能更好
-	mu sync.RWMutex
-
-	// data 是实际存储数据的 Map
+	mu   sync.RWMutex
 	data map[string]string
+	wal  *wal.WAL // 持有 WAL 对象的指针
 }
 
-// NewMemoryStore 是一个构造函数工厂
-// Go 没有 class 的构造函数，通常用 New... 函数返回指针
-func NewMemoryStore() *MemoryStore {
+// NewMemoryStore 构造函数现在需要传入 WAL
+func NewMemoryStore(w *wal.WAL) *MemoryStore {
 	return &MemoryStore{
 		data: make(map[string]string),
+		wal:  w,
 	}
 }
 
-// Put 写入数据
-func (s *MemoryStore) Put(key string, value string) {
-	// 加写锁，阻止其他读写
+// Put 现在包含了两步：写日志 + 更新内存
+func (s *MemoryStore) Put(key string, value string) error {
 	s.mu.Lock()
-	// defer 关键字非常重要，它确保函数退出前（无论是否报错）一定会执行 Unlock
-	// 类似 Python 的 try...finally，但更简洁
 	defer s.mu.Unlock()
 
+	// 1. 先持久化 (Write Ahead)
+	entry := wal.LogEntry{
+		Command: "PUT",
+		Key:     key,
+		Value:   value,
+	}
+
+	if err := s.wal.Write(entry); err != nil {
+		return err // 如果写磁盘失败，直接报错，不更新内存
+	}
+
+	// 2. 更新内存
 	s.data[key] = value
+	return nil
 }
 
-// Get 读取数据
 func (s *MemoryStore) Get(key string) (string, bool) {
-	// 加读锁，允许其他 Goroutine 同时读取，但不允许写入
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -51,10 +54,13 @@ func (s *MemoryStore) Get(key string) (string, bool) {
 	return val, ok
 }
 
-// Delete 删除数据
-func (s *MemoryStore) Delete(key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.data, key)
+// Restore 从日志列表中恢复内存状态
+// 这个方法只在启动时调用，不需要加锁（因为那时服务还没开始监听）
+func (s *MemoryStore) Restore(entries []wal.LogEntry) {
+	for _, entry := range entries {
+		if entry.Command == "PUT" {
+			s.data[entry.Key] = entry.Value
+		}
+		// 如果支持 DELETE，这里也要处理
+	}
 }

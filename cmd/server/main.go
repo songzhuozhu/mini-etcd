@@ -34,6 +34,7 @@ func main() {
 	srv := server.NewHTTPServer(kv)
 	http.HandleFunc("/put", srv.HandlePut)
 	http.HandleFunc("/get", srv.HandleGet)
+	http.HandleFunc("/watch", srv.HandleWatch)
 
 	addr := ":8080"
 	log.Printf("Mini-Etcd Server starting on %s ...", addr)
